@@ -1,531 +1,1091 @@
-import { useState, useMemo } from "react";
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사목회 결재 시스템</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --surface: #ffffff;
+    --border: #e0d9cf;
+    --accent: #7a5c3a;
+    --accent2: #c4a882;
+    --text: #2c2416;
+    --text2: #7a6e61;
+    --approved: #2d7a4f;
+    --rejected: #c0392b;
+    --pending: #b07d2e;
+    --processing: #2d5f8a;
+    --approved-bg: #eaf5ef;
+    --rejected-bg: #fdf0ef;
+    --pending-bg: #fdf6e8;
+    --processing-bg: #eaf0f8;
+  }
 
-const DOC_TYPES = ["예산 및 결산서", "지출보고서", "지출요청서", "행사 계획 보고서"];
-const STATUS_LABEL = { pending: "대기", approved: "승인", rejected: "반려", processing: "결재중" };
-const STATUS_COLOR = { pending: "#f59e0b", approved: "#10b981", rejected: "#ef4444", processing: "#3b82f6" };
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-const INITIAL_USERS = [
-  { id: 1, name: "김민준",  role: "일반 직원",  pw: "1234", isAdmin: false },
-  { id: 2, name: "이서연",  role: "일반 직원",  pw: "1234", isAdmin: false },
-  { id: 3, name: "박지훈",  role: "분과장",     pw: "1234", isAdmin: false },
-  { id: 4, name: "최유진",  role: "재정분과장", pw: "1234", isAdmin: false },
-  { id: 5, name: "정승호",  role: "사목회장",   pw: "1234", isAdmin: false },
-  { id: 6, name: "김베드로",role: "지도 신부",  pw: "1234", isAdmin: false },
-  { id: 7, name: "총무",    role: "총무",       pw: "admin123", isAdmin: true },
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── LOGIN ── */
+  #loginScreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 40px rgba(122,92,58,0.10);
+  }
+
+  .login-card .cross {
+    text-align: center;
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .login-card h1 {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .login-card p.sub {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 32px;
+  }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: #faf9f7;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--accent2);
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+
+  .err-msg {
+    color: var(--rejected);
+    font-size: 13px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    width: 100%;
+    padding: 12px;
+  }
+  .btn-primary:hover { background: #5e4529; }
+  .btn-outline {
+    background: transparent;
+    color: var(--accent);
+    border: 1.5px solid var(--accent2);
+  }
+  .btn-outline:hover { background: #faf5ee; }
+  .btn-sm { padding: 6px 14px; font-size: 13px; }
+  .btn-approve { background: var(--approved); color: #fff; }
+  .btn-approve:hover { background: #1f5f3a; }
+  .btn-reject { background: var(--rejected); color: #fff; }
+  .btn-reject:hover { background: #962d22; }
+  .btn-danger { background: #c0392b; color: #fff; }
+  .btn-danger:hover { background: #962d22; }
+
+  /* ── MAIN APP ── */
+  #app { display: none; min-height: 100vh; }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+  .badge-admin {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: calc(100vh - 60px);
+  }
+
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+  }
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text2);
+    padding: 0 20px;
+    margin-bottom: 8px;
+    margin-top: 16px;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    color: var(--text2);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+  }
+  .sidebar-item:hover { background: #faf5ee; color: var(--text); }
+  .sidebar-item.active {
+    background: #faf5ee;
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .sidebar-item .icon { width: 18px; text-align: center; }
+
+  .main { padding: 28px; overflow-y: auto; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ── STATS ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .stat-card .num {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-card .lbl { font-size: 12px; color: var(--text2); }
+
+  /* ── DOC LIST ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .doc-row {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0ece5;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .doc-row:last-child { border-bottom: none; }
+  .doc-row:hover { background: #faf8f4; }
+
+  .doc-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #f3ede3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .doc-info { flex: 1; min-width: 0; }
+  .doc-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-meta { font-size: 12px; color: var(--text2); }
+
+  .status-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .status-pending { background: var(--pending-bg); color: var(--pending); }
+  .status-approved { background: var(--approved-bg); color: var(--approved); }
+  .status-rejected { background: var(--rejected-bg); color: var(--rejected); }
+  .status-processing { background: var(--processing-bg); color: var(--processing); }
+
+  /* ── DOC DETAIL ── */
+  .detail-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .detail-title {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 16px;
+  }
+  .detail-meta span strong { color: var(--text); }
+  .detail-content {
+    background: #faf8f4;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.7;
+    margin-top: 12px;
+  }
+
+  .steps-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .steps-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 16px;
+    color: var(--text2);
+    letter-spacing: 0.03em;
+  }
+  .steps-list { display: flex; flex-direction: column; gap: 0; }
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0ece5;
+    position: relative;
+  }
+  .step-item:last-child { border-bottom: none; }
+  .step-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+  .step-circle.approved { background: var(--approved-bg); color: var(--approved); }
+  .step-circle.rejected { background: var(--rejected-bg); color: var(--rejected); }
+  .step-circle.pending { background: #f0ece5; color: var(--text2); }
+  .step-circle.current { background: var(--processing-bg); color: var(--processing); }
+
+  .step-info { flex: 1; }
+  .step-role { font-weight: 600; font-size: 14px; }
+  .step-status { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .step-comment { font-size: 13px; color: var(--text); margin-top: 4px; font-style: italic; }
+  .step-date { font-size: 12px; color: var(--text2); }
+
+  .action-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .action-title { font-weight: 700; font-size: 14px; margin-bottom: 16px; }
+  .action-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    margin-bottom: 16px;
+    padding: 6px 0;
+  }
+  .back-btn:hover { color: var(--accent); }
+
+  /* ── FORM ── */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    max-width: 600px;
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* ── NOTIFICATION ── */
+  .notif-item {
+    display: flex;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid #f0ece5;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .notif-item:hover { background: #faf8f4; }
+  .notif-item.unread { background: #fdf9f3; }
+  .notif-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .notif-text { font-size: 13px; line-height: 1.5; }
+  .notif-date { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* ── ADMIN ── */
+  .user-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #f0ece5;
+  }
+  .user-row:last-child { border-bottom: none; }
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent2);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text2);
+    font-size: 14px;
+  }
+  .empty-state .icon { font-size: 36px; margin-bottom: 12px; }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    padding: 6px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text2);
+  }
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 16px; }
+    .form-row { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Modal */
+  .modal-bg {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  }
+  .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+  .modal-btns { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="cross">✝️</div>
+    <h1>사목회 결재 시스템</h1>
+    <p class="sub">한인 가톨릭 공동체</p>
+    <div class="form-group">
+      <label>이름</label>
+      <input type="text" id="loginName" placeholder="이름을 입력하세요">
+    </div>
+    <div class="form-group">
+      <label>비밀번호</label>
+      <input type="password" id="loginPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <p class="err-msg" id="loginErr"></p>
+    <button class="btn btn-primary" onclick="doLogin()">로그인</button>
+    <p style="font-size:11px;color:var(--text2);margin-top:16px;text-align:center;">
+      초기 비밀번호: 1234 &nbsp;|&nbsp; 총무 비밀번호: admin123
+    </p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-title">✝️ 사목회 결재 시스템</div>
+    <div class="header-user">
+      <span id="headerName"></span>
+      <span id="headerRole" style="color:var(--accent2);font-size:12px;"></span>
+      <span id="headerAdmin" class="badge-admin" style="display:none;">총무</span>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-label">메뉴</div>
+      <div class="sidebar-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+        <span class="icon">🏠</span> 대시보드
+      </div>
+      <div class="sidebar-item" onclick="showPage('docs')" id="nav-docs">
+        <span class="icon">📄</span> 결재 문서함
+      </div>
+      <div class="sidebar-item" onclick="showPage('new')" id="nav-new">
+        <span class="icon">✏️</span> 결재 신청
+      </div>
+      <div class="sidebar-item" onclick="showPage('notif')" id="nav-notif">
+        <span class="icon">🔔</span> 알림
+        <span id="notifBadge" style="margin-left:auto;background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:20px;display:none;"></span>
+      </div>
+      <div class="sidebar-item" onclick="showPage('admin')" id="nav-admin" style="display:none;">
+        <span class="icon">⚙️</span> 관리자
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-title">대시보드</div>
+        <div class="stats-grid" id="statsGrid"></div>
+        <div class="card">
+          <div class="card-header">📋 내 결재 대기 문서</div>
+          <div id="myPendingList"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">🕐 최근 문서</div>
+          <div id="recentList"></div>
+        </div>
+      </div>
+
+      <!-- DOCS -->
+      <div class="page" id="page-docs">
+        <div class="page-title">결재 문서함</div>
+        <div class="filter-bar" id="filterBar"></div>
+        <div id="docsList"></div>
+      </div>
+
+      <!-- NEW -->
+      <div class="page" id="page-new">
+        <div class="page-title">결재 신청</div>
+        <div class="form-card">
+          <div class="form-group">
+            <label>문서 종류</label>
+            <select id="docType">
+              <option value="예산 및 결산서">예산 및 결산서</option>
+              <option value="지출보고서">지출보고서</option>
+              <option value="지출요청서">지출요청서</option>
+              <option value="행사 계획 보고서">행사 계획 보고서</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>제목</label>
+            <input type="text" id="docTitle" placeholder="문서 제목">
+          </div>
+          <div class="form-group">
+            <label>내용</label>
+            <textarea id="docContent" placeholder="결재 내용을 작성해주세요"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="submitDoc()">결재 신청</button>
+        </div>
+      </div>
+
+      <!-- NOTIF -->
+      <div class="page" id="page-notif">
+        <div class="page-title">알림</div>
+        <div class="card">
+          <div id="notifList"></div>
+        </div>
+      </div>
+
+      <!-- ADMIN -->
+      <div class="page" id="page-admin">
+        <div class="page-title">관리자 페이지</div>
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">👥 사목위원 목록</div>
+          <div id="userList"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">🗑️ 문서 관리</div>
+          <div id="adminDocList"></div>
+        </div>
+      </div>
+
+      <!-- DETAIL -->
+      <div class="page" id="page-detail">
+        <div class="back-btn" onclick="goBack()">← 목록으로</div>
+        <div id="detailContent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-bg" id="actionModal">
+  <div class="modal">
+    <h3 id="modalTitle">결재 처리</h3>
+    <div class="form-group">
+      <label>의견 (선택사항)</label>
+      <textarea id="modalComment" placeholder="의견을 남겨주세요" style="min-height:70px;"></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">취소</button>
+      <button class="btn" id="modalConfirmBtn" onclick="confirmAction()">확인</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DATA ──
+const USERS = [
+  { id:1, name:'김민준', role:'일반 직원', pw:'1234', isAdmin:false },
+  { id:2, name:'이서연', role:'일반 직원', pw:'1234', isAdmin:false },
+  { id:3, name:'박지훈', role:'분과장',    pw:'1234', isAdmin:false },
+  { id:4, name:'최유진', role:'재정분과장', pw:'1234', isAdmin:false },
+  { id:5, name:'정성호', role:'사목회장',  pw:'1234', isAdmin:false },
+  { id:6, name:'김베드로',role:'지도 신부', pw:'1234', isAdmin:false },
+  { id:7, name:'총무',    role:'총무',     pw:'admin123', isAdmin:true },
 ];
+const APPROVAL_LINE = ['분과장','재정분과장','사목회장','지도 신부'];
 
-const INITIAL_APPROVAL_LINE = ["분과장", "재정분과장", "사목회장", "지도 신부"];
+let docs = [
+  {
+    id:1, title:'3월 행사 지출 요청', type:'지출요청서',
+    content:'3월 부활절 행사 관련 제반 비용 지출 요청드립니다.',
+    author:1, authorName:'김민준', createdAt:'2026-04-10',
+    attachments:[],
+    steps: APPROVAL_LINE.map((role,i) => ({
+      role, status: i<2?'approved': i===2?'pending':'pending',
+      comment: i===0?'확인했습니다.':'',
+      date: i===0?'2026-04-11': i===1?'2026-04-12':null
+    }))
+  },
+  {
+    id:2, title:'4월 예산 및 결산서', type:'예산 및 결산서',
+    content:'4월 분과 활동 예산 계획을 보고드립니다.',
+    author:2, authorName:'이서연', createdAt:'2026-04-13',
+    attachments:[],
+    steps: APPROVAL_LINE.map(role => ({role, status:'pending', comment:'', date:null}))
+  }
+];
 
 let docIdCounter = 3;
-let userIdCounter = 7;
+let currentUser = null;
+let currentPage = 'dashboard';
+let prevPage = 'docs';
+let filterStatus = 'all';
+let pendingAction = null; // {docId, action}
 
-const INITIAL_DOCS = [
-  {
-    id: 1, title: "3월 행사 지출 요청", type: "지출요청서", content: "3월 부활절 행사 관련 제반 비용 지출 요청드립니다.",
-    author: 1, authorName: "김민준", createdAt: "2026-04-10", attachments: [],
-    steps: [
-      { role: "분과장",     status: "approved", comment: "확인했습니다.", date: "2026-04-11" },
-      { role: "재정분과장", status: "approved", comment: "", date: "2026-04-12" },
-      { role: "사목회장",   status: "pending",  comment: "", date: null },
-      { role: "지도 신부",  status: "pending",  comment: "", date: null },
-    ],
-  },
-  {
-    id: 2, title: "4월 예산 및 결산서", type: "예산 및 결산서", content: "4월 분과 활동 예산 계획을 보고드립니다.",
-    author: 2, authorName: "이서연", createdAt: "2026-04-13", attachments: [],
-    steps: INITIAL_APPROVAL_LINE.map(role => ({ role, status: "pending", comment: "", date: null })),
-  },
-];
-
+// ── STATUS ──
 function getDocStatus(doc) {
-  if (doc.steps.every(s => s.status === "approved")) return "approved";
-  if (doc.steps.some(s => s.status === "rejected")) return "rejected";
-  if (doc.steps.some(s => s.status === "approved")) return "processing";
-  return "pending";
+  if (doc.steps.every(s=>s.status==='approved')) return 'approved';
+  if (doc.steps.some(s=>s.status==='rejected')) return 'rejected';
+  if (doc.steps.some(s=>s.status==='approved')) return 'processing';
+  return 'pending';
 }
-function getCurrentStep(doc) { return doc.steps.findIndex(s => s.status === "pending"); }
+function getCurrentStep(doc) {
+  return doc.steps.findIndex(s=>s.status==='pending');
+}
+const STATUS_LABEL = {pending:'대기',approved:'승인',rejected:'반려',processing:'결재중'};
+const DOC_ICON = {'예산 및 결산서':'📊','지출보고서':'🧾','지출요청서':'💸','행사 계획 보고서':'📅'};
 
-function makeNotifs(docs, users) {
+// ── NOTIFICATIONS ──
+function getNotifs() {
   const notifs = {};
-  users.forEach(u => { notifs[u.id] = []; });
+  USERS.forEach(u => notifs[u.id] = []);
   docs.forEach(doc => {
     const curStep = getCurrentStep(doc);
     if (curStep >= 0) {
       const approverRole = doc.steps[curStep].role;
-      const approver = users.find(u => u.role === approverRole);
-      if (approver) notifs[approver.id].push({ id: doc.id, msg: `[${doc.type}] "${doc.title}" 결재 요청`, date: doc.createdAt });
+      const approver = USERS.find(u => u.role === approverRole);
+      if (approver) notifs[approver.id].push({docId:doc.id, msg:`[${doc.type}] "${doc.title}" 결재 요청`, date:doc.createdAt, read:false});
     }
     doc.steps.forEach(step => {
-      if (step.status === "approved" || step.status === "rejected") {
-        const author = users.find(u => u.id === doc.author);
-        if (author) notifs[author.id].push({ id: doc.id, msg: `"${doc.title}" ${step.role}이(가) ${step.status === "approved" ? "승인" : "반려"}했습니다.`, date: step.date });
+      if (step.status==='approved'||step.status==='rejected') {
+        const author = USERS.find(u=>u.id===doc.author);
+        if (author) notifs[author.id].push({docId:doc.id, msg:`"${doc.title}" ${step.role}이(가) ${step.status==='approved'?'승인':'반려'}했습니다.`, date:step.date, read:true});
       }
     });
   });
   return notifs;
 }
 
-const iStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 12px", fontSize: 14, outline: "none", background: "#fff" };
-const bStyle = { border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+// ── LOGIN ──
+function doLogin() {
+  const name = document.getElementById('loginName').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  const user = USERS.find(u => u.name===name && u.pw===pw);
+  if (!user) { document.getElementById('loginErr').textContent = '이름 또는 비밀번호가 올바르지 않습니다.'; return; }
+  currentUser = user;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('headerName').textContent = user.name;
+  document.getElementById('headerRole').textContent = user.role;
+  if (user.isAdmin) {
+    document.getElementById('headerAdmin').style.display = 'inline';
+    document.getElementById('nav-admin').style.display = 'flex';
+  }
+  showPage('dashboard');
+}
 
-function StatusBadge({ status }) {
-  return <span style={{ background: STATUS_COLOR[status] + "22", color: STATUS_COLOR[status], borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{STATUS_LABEL[status]}</span>;
+function doLogout() {
+  currentUser = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginName').value = '';
+  document.getElementById('loginPw').value = '';
+  document.getElementById('loginErr').textContent = '';
 }
-function Field({ label, children }) {
-  return <div style={{ marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#374151" }}>{label}</label>{children}</div>;
+
+// ── NAVIGATION ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if (document.getElementById('nav-'+name)) document.getElementById('nav-'+name).classList.add('active');
+  currentPage = name;
+  if (name==='dashboard') renderDashboard();
+  if (name==='docs') renderDocs();
+  if (name==='notif') renderNotif();
+  if (name==='admin') renderAdmin();
+  updateNotifBadge();
 }
-function Empty({ text }) {
-  return <div style={{ textAlign: "center", color: "#94a3b8", padding: "40px 0", fontSize: 14 }}>{text}</div>;
+
+function goBack() { showPage(prevPage); }
+
+// ── DASHBOARD ──
+function renderDashboard() {
+  const myDocs = docs.filter(d=>d.author===currentUser.id);
+  const myApprove = docs.filter(d=>{
+    const cur = getCurrentStep(d);
+    return cur>=0 && d.steps[cur].role===currentUser.role;
+  });
+  const total = docs.length;
+  const approved = docs.filter(d=>getDocStatus(d)==='approved').length;
+  const pending = docs.filter(d=>getDocStatus(d)==='pending'||getDocStatus(d)==='processing').length;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="num">${total}</div><div class="lbl">전체 문서</div></div>
+    <div class="stat-card"><div class="num">${myDocs.length}</div><div class="lbl">내 문서</div></div>
+    <div class="stat-card"><div class="num">${approved}</div><div class="lbl">승인 완료</div></div>
+    <div class="stat-card"><div class="num">${pending}</div><div class="lbl">진행 중</div></div>
+  `;
+
+  const myPendingList = document.getElementById('myPendingList');
+  if (myApprove.length===0) {
+    myPendingList.innerHTML = '<div class="empty-state"><div class="icon">✅</div>결재 대기 문서가 없습니다.</div>';
+  } else {
+    myPendingList.innerHTML = myApprove.map(d=>docRowHTML(d)).join('');
+  }
+
+  const recent = [...docs].sort((a,b)=>b.id-a.id).slice(0,5);
+  document.getElementById('recentList').innerHTML = recent.length===0
+    ? '<div class="empty-state"><div class="icon">📭</div>문서가 없습니다.</div>'
+    : recent.map(d=>docRowHTML(d)).join('');
 }
-function DocRow({ doc, onClick }) {
+
+// ── DOCS ──
+function renderDocs() {
+  const filters = [
+    {key:'all',label:'전체'},
+    {key:'pending',label:'대기'},
+    {key:'processing',label:'결재중'},
+    {key:'approved',label:'승인'},
+    {key:'rejected',label:'반려'},
+  ];
+  document.getElementById('filterBar').innerHTML = filters.map(f=>`
+    <button class="filter-btn ${filterStatus===f.key?'active':''}" onclick="setFilter('${f.key}')">${f.label}</button>
+  `).join('');
+
+  let filtered = filterStatus==='all' ? docs : docs.filter(d=>getDocStatus(d)===filterStatus);
+  document.getElementById('docsList').innerHTML = filtered.length===0
+    ? '<div class="empty-state" style="background:#fff;border-radius:12px;"><div class="icon">📭</div>문서가 없습니다.</div>'
+    : filtered.map(d=>docRowHTML(d)).join('');
+}
+
+function setFilter(key) { filterStatus=key; renderDocs(); }
+
+function docRowHTML(doc) {
+  const status = getDocStatus(doc);
+  const cur = getCurrentStep(doc);
+  const waitingRole = cur>=0 ? ` · ${doc.steps[cur].role} 결재 대기` : '';
+  return `<div class="doc-row" onclick="openDoc(${doc.id})">
+    <div class="doc-icon">${DOC_ICON[doc.type]||'📄'}</div>
+    <div class="doc-info">
+      <div class="doc-title">${doc.title}</div>
+      <div class="doc-meta">${doc.type} · ${doc.authorName} · ${doc.createdAt}${waitingRole}</div>
+    </div>
+    <span class="status-badge status-${status}">${STATUS_LABEL[status]}</span>
+  </div>`;
+}
+
+// ── DETAIL ──
+function openDoc(docId) {
+  prevPage = currentPage;
+  const doc = docs.find(d=>d.id===docId);
+  if (!doc) return;
   const status = getDocStatus(doc);
   const curStep = getCurrentStep(doc);
-  return (
-    <div onClick={onClick} style={{ background: "#fff", borderRadius: 12, padding: "16px 20px", marginBottom: 10, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", borderLeft: `4px solid ${STATUS_COLOR[status]}` }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"}
-      onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.05)"}>
-      <div>
-        <div style={{ fontWeight: 600, fontSize: 15 }}>{doc.title}</div>
-        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
-          {doc.type} · {doc.authorName} · {doc.createdAt}
-          {status === "processing" && curStep >= 0 && <span style={{ marginLeft: 8, color: "#3b82f6" }}>({doc.steps[curStep].role} 결재 대기)</span>}
-        </div>
-      </div>
-      <StatusBadge status={status} />
-    </div>
-  );
-}
-
-// ── LOGIN ──────────────────────────────────────────
-function LoginScreen({ users, onLogin }) {
-  const [name, setName] = useState("");
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState("");
-  const handleLogin = () => {
-    const user = users.find(u => u.name === name.trim() && u.pw === pw);
-    if (!user) { setErr("이름 또는 비밀번호가 올바르지 않습니다."); return; }
-    onLogin(user);
-  };
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#1e3a5f 0%,#2a6470 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: "48px 40px", width: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>⛪</div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>사목회 결재 시스템</h1>
-          <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>로그인하여 계속하세요</p>
-        </div>
-        <Field label="이름"><input value={name} onChange={e => setName(e.target.value)} placeholder="이름 입력" style={iStyle} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
-        <Field label="비밀번호"><input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="비밀번호 입력" style={iStyle} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
-        {err && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>⚠️ {err}</div>}
-        <button onClick={handleLogin} style={{ ...bStyle, background: "#1e3a5f", color: "#fff", width: "100%", padding: 13, fontSize: 15 }}>로그인</button>
-        <div style={{ marginTop: 20, background: "#f8fafc", borderRadius: 10, padding: "12px 14px", fontSize: 12, color: "#64748b" }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>테스트 계정</div>
-          {users.map(u => <div key={u.id}>· {u.name} ({u.role}) — {u.isAdmin ? "admin123" : "1234"}</div>)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── ADMIN PANEL ────────────────────────────────────
-function AdminPanel({ users, setUsers, approvalLine, setApprovalLine, onToast }) {
-  const [tab, setTab] = useState("members"); // members | line
-  const [editUser, setEditUser] = useState(null);
-  const [newUser, setNewUser] = useState({ name: "", role: "일반 직원", pw: "1234" });
-  const [newLine, setNewLine] = useState([...approvalLine]);
-  const [newStep, setNewStep] = useState("");
-
-  const nonAdminUsers = users.filter(u => !u.isAdmin);
-  const roleOptions = ["일반 직원", ...approvalLine];
-
-  const saveUser = () => {
-    if (!editUser.name.trim()) { onToast("이름을 입력하세요.", "error"); return; }
-    setUsers(prev => prev.map(u => u.id === editUser.id ? editUser : u));
-    setEditUser(null);
-    onToast("수정되었습니다.");
-  };
-  const addUser = () => {
-    if (!newUser.name.trim()) { onToast("이름을 입력하세요.", "error"); return; }
-    if (users.find(u => u.name === newUser.name.trim())) { onToast("이미 존재하는 이름입니다.", "error"); return; }
-    setUsers(prev => [...prev, { id: ++userIdCounter, ...newUser, name: newUser.name.trim(), isAdmin: false }]);
-    setNewUser({ name: "", role: "일반 직원", pw: "1234" });
-    onToast("인원이 추가되었습니다.");
-  };
-  const deleteUser = (id) => {
-    setUsers(prev => prev.filter(u => u.id !== id));
-    onToast("인원이 삭제되었습니다.");
-  };
-  const saveLine = () => {
-    if (newLine.length === 0) { onToast("결재 라인을 1단계 이상 설정하세요.", "error"); return; }
-    setApprovalLine([...newLine]);
-    onToast("결재 라인이 저장되었습니다.");
-  };
-  const moveLine = (i, dir) => {
-    const arr = [...newLine];
-    const j = i + dir;
-    if (j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    setNewLine(arr);
-  };
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-        <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>🔧 총무 전용</span>
-        <h2 style={{ fontSize: 20, fontWeight: 800 }}>관리자 패널</h2>
-      </div>
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {[{ id: "members", label: "👥 인원 관리" }, { id: "line", label: "📋 결재 라인 관리" }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ ...bStyle, background: tab === t.id ? "#1e3a5f" : "#f1f5f9", color: tab === t.id ? "#fff" : "#64748b", padding: "8px 18px", fontSize: 13 }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 인원 관리 */}
-      {tab === "members" && (
-        <div>
-          {/* 인원 목록 */}
-          <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 20 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>현재 인원 ({nonAdminUsers.length}명)</h3>
-            <div style={{ display: "grid", gap: 10 }}>
-              {nonAdminUsers.map(u => (
-                <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "#f8fafc", borderRadius: 10 }}>
-                  {editUser?.id === u.id ? (
-                    <div style={{ display: "flex", gap: 8, flex: 1, flexWrap: "wrap" }}>
-                      <input value={editUser.name} onChange={e => setEditUser(p => ({ ...p, name: e.target.value }))} style={{ ...iStyle, width: 120 }} />
-                      <select value={editUser.role} onChange={e => setEditUser(p => ({ ...p, role: e.target.value }))} style={{ ...iStyle, width: 130 }}>
-                        {roleOptions.map(r => <option key={r}>{r}</option>)}
-                      </select>
-                      <input value={editUser.pw} onChange={e => setEditUser(p => ({ ...p, pw: e.target.value }))} placeholder="비밀번호" style={{ ...iStyle, width: 110 }} />
-                      <button onClick={saveUser} style={{ ...bStyle, background: "#10b981", color: "#fff", padding: "8px 14px", fontSize: 13 }}>저장</button>
-                      <button onClick={() => setEditUser(null)} style={{ ...bStyle, background: "#f1f5f9", color: "#64748b", padding: "8px 14px", fontSize: 13 }}>취소</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</span>
-                        <span style={{ marginLeft: 10, fontSize: 12, background: "#dbeafe", color: "#1d4ed8", borderRadius: 6, padding: "2px 8px" }}>{u.role}</span>
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button onClick={() => setEditUser({ ...u })} style={{ ...bStyle, background: "#eff6ff", color: "#1d4ed8", padding: "6px 12px", fontSize: 12 }}>수정</button>
-                        <button onClick={() => deleteUser(u.id)} style={{ ...bStyle, background: "#fee2e2", color: "#ef4444", padding: "6px 12px", fontSize: 12 }}>삭제</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* 인원 추가 */}
-          <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>인원 추가</h3>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <input value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="이름" style={{ ...iStyle, width: 130 }} />
-              <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))} style={{ ...iStyle, width: 140 }}>
-                {roleOptions.map(r => <option key={r}>{r}</option>)}
-              </select>
-              <input value={newUser.pw} onChange={e => setNewUser(p => ({ ...p, pw: e.target.value }))} placeholder="비밀번호" style={{ ...iStyle, width: 120 }} />
-              <button onClick={addUser} style={{ ...bStyle, background: "#1e3a5f", color: "#fff", padding: "9px 18px", fontSize: 13 }}>+ 추가</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 결재 라인 관리 */}
-      {tab === "line" && (
-        <div style={{ maxWidth: 480 }}>
-          <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>결재 단계 순서</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-              {newLine.map((step, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "#f8fafc", borderRadius: 10, padding: "10px 14px" }}>
-                  <span style={{ background: "#dbeafe", color: "#1d4ed8", borderRadius: 20, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{step}</span>
-                  <button onClick={() => moveLine(i, -1)} disabled={i === 0} style={{ ...bStyle, padding: "4px 10px", fontSize: 13, background: i === 0 ? "#f1f5f9" : "#eff6ff", color: i === 0 ? "#cbd5e1" : "#1d4ed8" }}>▲</button>
-                  <button onClick={() => moveLine(i, 1)} disabled={i === newLine.length - 1} style={{ ...bStyle, padding: "4px 10px", fontSize: 13, background: i === newLine.length - 1 ? "#f1f5f9" : "#eff6ff", color: i === newLine.length - 1 ? "#cbd5e1" : "#1d4ed8" }}>▼</button>
-                  <button onClick={() => setNewLine(prev => prev.filter((_, j) => j !== i))} style={{ ...bStyle, padding: "4px 10px", fontSize: 13, background: "#fee2e2", color: "#ef4444" }}>✕</button>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              <input value={newStep} onChange={e => setNewStep(e.target.value)} placeholder="단계 이름 (예: 부장)" style={{ ...iStyle }} />
-              <button onClick={() => { if (!newStep.trim()) return; setNewLine(p => [...p, newStep.trim()]); setNewStep(""); }}
-                style={{ ...bStyle, background: "#1e3a5f", color: "#fff", whiteSpace: "nowrap" }}>+ 추가</button>
-            </div>
-            <button onClick={saveLine} style={{ ...bStyle, background: "#10b981", color: "#fff", width: "100%" }}>결재 라인 저장</button>
-          </div>
-          <div style={{ fontSize: 12, color: "#94a3b8", padding: "0 4px" }}>⚠️ 결재 라인 변경은 새로 제출되는 문서부터 적용됩니다.</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── MAIN ───────────────────────────────────────────
-export default function App() {
-  const [users, setUsers] = useState(INITIAL_USERS);
-  const [approvalLine, setApprovalLine] = useState(INITIAL_APPROVAL_LINE);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [docs, setDocs] = useState(INITIAL_DOCS);
-  const [view, setView] = useState("dashboard");
-  const [selectedDoc, setSelectedDoc] = useState(null);
-  const [form, setForm] = useState({ title: "", type: DOC_TYPES[0], content: "", attachments: [] });
-  const [comment, setComment] = useState("");
-  const [toast, setToast] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState("전체");
-  const [showNotifs, setShowNotifs] = useState(false);
-  const [readNotifs, setReadNotifs] = useState({});
-
-  const notify = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2500); };
-
-  const allNotifs = useMemo(() => makeNotifs(docs, users), [docs, users]);
-  const myNotifs = currentUser ? (allNotifs[currentUser.id] || []) : [];
-  const unreadCount = myNotifs.filter(n => !readNotifs[`${currentUser?.id}-${n.msg}`]).length;
-  const markAllRead = () => { const r = { ...readNotifs }; myNotifs.forEach(n => { r[`${currentUser.id}-${n.msg}`] = true; }); setReadNotifs(r); };
-
-  const myDocs = docs.filter(d => d.author === currentUser?.id);
-  const needApproval = docs.filter(d => { const s = getCurrentStep(d); return s >= 0 && d.steps[s].role === currentUser?.role; });
-
-  const filteredDocs = useMemo(() => docs.filter(d => {
-    const q = searchQuery === "" || d.title.includes(searchQuery) || d.authorName.includes(searchQuery) || d.content.includes(searchQuery);
-    const t = searchType === "전체" || d.type === searchType;
-    return q && t;
-  }), [docs, searchQuery, searchType]);
-
-  const handleSubmit = () => {
-    if (!form.title.trim() || !form.content.trim()) { notify("제목과 내용을 입력해주세요.", "error"); return; }
-    const newDoc = {
-      id: ++docIdCounter, title: form.title, type: form.type, content: form.content,
-      author: currentUser.id, authorName: currentUser.name,
-      createdAt: new Date().toISOString().slice(0, 10), attachments: form.attachments,
-      steps: approvalLine.map(role => ({ role, status: "pending", comment: "", date: null })),
-    };
-    setDocs(prev => [newDoc, ...prev]);
-    setForm({ title: "", type: DOC_TYPES[0], content: "", attachments: [] });
-    setView("dashboard"); notify("문서가 제출되었습니다!");
-  };
-
-  const handleApprove = (docId, approve) => {
-    setDocs(prev => prev.map(d => {
-      if (d.id !== docId) return d;
-      const step = getCurrentStep(d);
-      return { ...d, steps: d.steps.map((s, i) => i === step ? { ...s, status: approve ? "approved" : "rejected", comment, date: new Date().toISOString().slice(0, 10) } : s) };
-    }));
-    setComment(""); setView("list");
-    notify(approve ? "승인되었습니다." : "반려되었습니다.", approve ? "success" : "error");
-  };
-
-  const canApprove = (doc) => { const s = getCurrentStep(doc); return s >= 0 && doc.steps[s].role === currentUser?.role; };
-
-  if (!currentUser) return <LoginScreen users={users} onLogin={u => { setCurrentUser(u); setView("dashboard"); }} />;
-
+  const canApprove = curStep>=0 && doc.steps[curStep].role===currentUser.role;
+  const isAuthor = doc.author===currentUser.id;
   const isAdmin = currentUser.isAdmin;
-  const navItems = [
-    { id: "dashboard", label: "🏠 대시보드" },
-    { id: "new", label: "✏️ 문서 작성" },
-    { id: "list", label: "📋 전체 문서" },
-    { id: "search", label: "🔍 문서 검색" },
-    ...(isAdmin ? [{ id: "admin", label: "🔧 관리자 패널" }] : []),
-  ];
 
-  return (
-    <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#f1f5f9", minHeight: "100vh", color: "#1e293b" }}>
-      {toast && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: toast.type === "success" ? "#10b981" : "#ef4444", color: "#fff", padding: "12px 20px", borderRadius: 10, fontWeight: 600, fontSize: 14, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>{toast.msg}</div>}
-
-      {/* Header */}
-      <div style={{ background: "#1e3a5f", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 800, fontSize: 16, color: "#fff" }}>⛪ 사목회 결재 시스템</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {!isAdmin && (
-            <div style={{ position: "relative" }}>
-              <button onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs) markAllRead(); }}
-                style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", width: 36, height: 36, borderRadius: 8, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>🔔</button>
-              {unreadCount > 0 && <div style={{ position: "absolute", top: -4, right: -4, background: "#ef4444", color: "#fff", borderRadius: "50%", width: 18, height: 18, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{unreadCount}</div>}
-              {showNotifs && (
-                <div style={{ position: "absolute", right: 0, top: 44, width: 300, background: "#fff", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.15)", zIndex: 200 }} onMouseLeave={() => setShowNotifs(false)}>
-                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", fontWeight: 700, fontSize: 14 }}>알림</div>
-                  {myNotifs.length === 0 ? <div style={{ padding: 20, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>알림이 없습니다.</div> :
-                    myNotifs.slice(0, 8).map((n, i) => (
-                      <div key={i} onClick={() => { const d = docs.find(doc => doc.id === n.id); if (d) { setSelectedDoc(d); setView("detail"); setShowNotifs(false); } }}
-                        style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: 13, background: readNotifs[`${currentUser.id}-${n.msg}`] ? "#fff" : "#eff6ff" }}>
-                        <div>{n.msg}</div>
-                        <div style={{ color: "#94a3b8", fontSize: 11, marginTop: 3 }}>{n.date}</div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          )}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: isAdmin ? "#f59e0b" : "#2a9d8f", color: "#fff", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>{currentUser.name[0]}</div>
-            <div style={{ color: "#fff", fontSize: 13 }}>
-              <span style={{ fontWeight: 700 }}>{currentUser.name}</span>
-              <span style={{ color: "rgba(255,255,255,0.6)", marginLeft: 6 }}>({currentUser.role})</span>
-            </div>
-          </div>
-          <button onClick={() => { setCurrentUser(null); setView("dashboard"); }} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "rgba(255,255,255,0.8)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12 }}>로그아웃</button>
-        </div>
+  let stepsHTML = doc.steps.map((step,i)=>{
+    let cls = step.status;
+    if (step.status==='pending' && i===curStep) cls='current';
+    const icon = step.status==='approved'?'✓': step.status==='rejected'?'✗': i===curStep?'●':'○';
+    return `<div class="step-item">
+      <div class="step-circle ${cls}">${icon}</div>
+      <div class="step-info">
+        <div class="step-role">${step.role}</div>
+        <div class="step-status">${STATUS_LABEL[step.status]||'대기'} ${step.date?`· ${step.date}`:''}</div>
+        ${step.comment?`<div class="step-comment">"${step.comment}"</div>`:''}
       </div>
+    </div>`;
+  }).join('');
 
-      <div style={{ display: "flex", minHeight: "calc(100vh - 56px)" }}>
-        {/* Sidebar */}
-        <div style={{ width: 200, background: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px 0", flexShrink: 0 }}>
-          {navItems.map(item => (
-            <div key={item.id} onClick={() => setView(item.id)}
-              style={{ padding: "10px 20px", cursor: "pointer", fontSize: 14, fontWeight: view === item.id ? 700 : 400, color: view === item.id ? "#1e3a5f" : "#64748b", background: view === item.id ? "#eff6ff" : "transparent", borderLeft: view === item.id ? "3px solid #3b82f6" : "3px solid transparent" }}>
-              {item.label}
-            </div>
-          ))}
-          {!isAdmin && (
-            <>
-              <div style={{ margin: "16px 20px 8px", fontSize: 11, color: "#94a3b8", fontWeight: 700, letterSpacing: 1 }}>결재 라인</div>
-              {approvalLine.map((r, i) => (
-                <div key={r} style={{ padding: "6px 20px", fontSize: 12, color: "#475569", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ background: "#dbeafe", color: "#1d4ed8", borderRadius: 12, padding: "1px 7px", fontWeight: 700, fontSize: 11 }}>{i + 1}</span>{r}
-                </div>
-              ))}
-            </>
-          )}
-        </div>
+  let actionHTML = '';
+  if (canApprove) {
+    actionHTML = `<div class="action-card">
+      <div class="action-title">✍️ 결재 처리</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">현재 귀하(${currentUser.role})의 결재가 필요합니다.</p>
+      <div class="action-btns">
+        <button class="btn btn-approve" onclick="openModal(${docId},'approve')">✔ 승인</button>
+        <button class="btn btn-reject" onclick="openModal(${docId},'reject')">✖ 반려</button>
+      </div>
+    </div>`;
+  }
 
-        {/* Main */}
-        <div style={{ flex: 1, padding: 24, overflowY: "auto" }}>
+  let deleteHTML = '';
+  if (isAdmin || isAuthor) {
+    deleteHTML = `<div style="margin-top:8px;">
+      <button class="btn btn-danger btn-sm" onclick="deleteDoc(${docId})">🗑 문서 삭제</button>
+    </div>`;
+  }
 
-          {view === "admin" && isAdmin && <AdminPanel users={users} setUsers={setUsers} approvalLine={approvalLine} setApprovalLine={l => { setApprovalLine(l); }} onToast={notify} />}
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-header">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <span class="status-badge status-${status}">${STATUS_LABEL[status]}</span>
+        <span style="font-size:12px;color:var(--text2);">${doc.type}</span>
+      </div>
+      <div class="detail-title">${doc.title}</div>
+      <div class="detail-meta">
+        <span>작성자: <strong>${doc.authorName}</strong></span>
+        <span>작성일: <strong>${doc.createdAt}</strong></span>
+      </div>
+      <div class="detail-content">${doc.content}</div>
+      ${deleteHTML}
+    </div>
+    <div class="steps-card">
+      <div class="steps-title">결재선</div>
+      <div class="steps-list">${stepsHTML}</div>
+    </div>
+    ${actionHTML}
+  `;
+  showPage('detail');
+}
 
-          {view === "dashboard" && !isAdmin && (
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>대시보드</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 16, marginBottom: 28 }}>
-                {[{ label: "내 문서", value: myDocs.length, color: "#3b82f6" }, { label: "결재 대기", value: needApproval.length, color: "#f59e0b" }, { label: "승인 완료", value: docs.filter(d => getDocStatus(d) === "approved").length, color: "#10b981" }, { label: "반려", value: docs.filter(d => getDocStatus(d) === "rejected").length, color: "#ef4444" }].map(s => (
-                  <div key={s.label} style={{ background: "#fff", borderRadius: 12, padding: "20px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              {needApproval.length > 0 && <><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#f59e0b" }}>⏳ 결재 대기 중</h3>{needApproval.map(doc => <DocRow key={doc.id} doc={doc} onClick={() => { setSelectedDoc(doc); setView("detail"); }} />)}</>}
-              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, marginTop: needApproval.length > 0 ? 20 : 0 }}>📄 내가 올린 문서</h3>
-              {myDocs.length === 0 ? <Empty text="제출한 문서가 없습니다." /> : myDocs.map(doc => <DocRow key={doc.id} doc={doc} onClick={() => { setSelectedDoc(doc); setView("detail"); }} />)}
-            </div>
-          )}
+// ── MODAL ──
+function openModal(docId, action) {
+  pendingAction = {docId, action};
+  document.getElementById('modalTitle').textContent = action==='approve'?'✔ 승인':'✖ 반려';
+  const btn = document.getElementById('modalConfirmBtn');
+  btn.className = 'btn ' + (action==='approve'?'btn-approve':'btn-reject');
+  btn.textContent = action==='approve'?'승인':'반려';
+  document.getElementById('modalComment').value = '';
+  document.getElementById('actionModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('actionModal').classList.remove('open');
+  pendingAction = null;
+}
+function confirmAction() {
+  if (!pendingAction) return;
+  const {docId, action} = pendingAction;
+  const comment = document.getElementById('modalComment').value.trim();
+  processDoc(docId, action, comment);
+  closeModal();
+}
 
-          {view === "dashboard" && isAdmin && (
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>대시보드</h2>
-              <div style={{ background: "#fef3c7", borderRadius: 12, padding: "16px 20px", marginBottom: 20, fontSize: 14, color: "#92400e" }}>
-                🔧 총무 계정으로 로그인되었습니다. 좌측 메뉴의 <b>관리자 패널</b>에서 인원 및 결재 라인을 관리할 수 있습니다.
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 16 }}>
-                {[{ label: "전체 문서", value: docs.length, color: "#3b82f6" }, { label: "결재 진행중", value: docs.filter(d => getDocStatus(d) === "processing").length, color: "#f59e0b" }, { label: "승인 완료", value: docs.filter(d => getDocStatus(d) === "approved").length, color: "#10b981" }, { label: "전체 인원", value: users.filter(u => !u.isAdmin).length, color: "#8b5cf6" }].map(s => (
-                  <div key={s.label} style={{ background: "#fff", borderRadius: 12, padding: "20px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+// ── PROCESS ──
+function processDoc(docId, action, comment) {
+  const doc = docs.find(d=>d.id===docId);
+  if (!doc) return;
+  const curStep = getCurrentStep(doc);
+  if (curStep<0) return;
+  const step = doc.steps[curStep];
+  step.status = action==='approve'?'approved':'rejected';
+  step.comment = comment;
+  step.date = new Date().toISOString().slice(0,10);
+  showToast(action==='approve'?'✅ 승인했습니다.':'❌ 반려했습니다.');
+  openDoc(docId);
+  updateNotifBadge();
+}
 
-          {view === "new" && (
-            <div style={{ maxWidth: 640 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>✏️ 문서 작성</h2>
-              <div style={{ background: "#fff", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                <Field label="문서 유형"><select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} style={iStyle}>{DOC_TYPES.map(t => <option key={t}>{t}</option>)}</select></Field>
-                <Field label="제목"><input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="문서 제목을 입력하세요" style={iStyle} /></Field>
-                <Field label="내용"><textarea value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} placeholder="내용을 입력하세요" rows={6} style={{ ...iStyle, resize: "vertical" }} /></Field>
-                <Field label="첨부 파일">
-                  <label style={{ display: "inline-block", cursor: "pointer", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#64748b" }}>
-                    📎 파일 선택<input type="file" multiple onChange={e => setForm(p => ({ ...p, attachments: [...p.attachments, ...Array.from(e.target.files).map(f => f.name)] }))} style={{ display: "none" }} />
-                  </label>
-                  {form.attachments.length > 0 && <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>{form.attachments.map((f, i) => <span key={i} style={{ background: "#eff6ff", color: "#1d4ed8", borderRadius: 6, padding: "3px 10px", fontSize: 12 }}>📄 {f}</span>)}</div>}
-                </Field>
-                <div style={{ padding: "12px 16px", background: "#f8fafc", borderRadius: 10, fontSize: 13, color: "#64748b" }}>결재 라인: {approvalLine.join(" → ")}</div>
-                <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-                  <button onClick={handleSubmit} style={{ ...bStyle, background: "#1e3a5f", color: "#fff" }}>제출하기</button>
-                  <button onClick={() => setView("dashboard")} style={{ ...bStyle, background: "#f1f5f9", color: "#64748b" }}>취소</button>
-                </div>
-              </div>
-            </div>
-          )}
+// ── SUBMIT ──
+function submitDoc() {
+  const type = document.getElementById('docType').value;
+  const title = document.getElementById('docTitle').value.trim();
+  const content = document.getElementById('docContent').value.trim();
+  if (!title||!content) { showToast('제목과 내용을 입력해주세요.'); return; }
+  const newDoc = {
+    id: docIdCounter++,
+    title, type, content,
+    author: currentUser.id,
+    authorName: currentUser.name,
+    createdAt: new Date().toISOString().slice(0,10),
+    attachments: [],
+    steps: APPROVAL_LINE.map(role=>({role, status:'pending', comment:'', date:null}))
+  };
+  docs.unshift(newDoc);
+  document.getElementById('docTitle').value = '';
+  document.getElementById('docContent').value = '';
+  showToast('✅ 결재 신청이 완료되었습니다.');
+  showPage('docs');
+}
 
-          {view === "list" && (
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>📋 전체 문서</h2>
-              {docs.length === 0 ? <Empty text="문서가 없습니다." /> : docs.map(doc => <DocRow key={doc.id} doc={doc} onClick={() => { setSelectedDoc(doc); setView("detail"); }} />)}
-            </div>
-          )}
+// ── DELETE ──
+function deleteDoc(docId) {
+  if (!confirm('문서를 삭제하시겠습니까?')) return;
+  docs = docs.filter(d=>d.id!==docId);
+  showToast('🗑 삭제되었습니다.');
+  showPage(prevPage);
+}
 
-          {view === "search" && (
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>🔍 문서 검색</h2>
-              <div style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="제목, 작성자, 내용으로 검색..." style={{ ...iStyle, flex: 1, minWidth: 200 }} />
-                <select value={searchType} onChange={e => setSearchType(e.target.value)} style={{ ...iStyle, width: "auto" }}>
-                  <option>전체</option>{DOC_TYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 12 }}>검색 결과: {filteredDocs.length}건</div>
-              {filteredDocs.length === 0 ? <Empty text="검색 결과가 없습니다." /> : filteredDocs.map(doc => <DocRow key={doc.id} doc={doc} onClick={() => { setSelectedDoc(doc); setView("detail"); }} />)}
-            </div>
-          )}
-
-          {view === "detail" && selectedDoc && (() => {
-            const doc = docs.find(d => d.id === selectedDoc.id) || selectedDoc;
-            const status = getDocStatus(doc);
-            const curStep = getCurrentStep(doc);
-            return (
-              <div style={{ maxWidth: 680 }}>
-                <button onClick={() => setView("list")} style={{ background: "none", border: "none", color: "#3b82f6", cursor: "pointer", fontSize: 14, marginBottom: 16, padding: 0 }}>← 목록으로</button>
-                <div style={{ background: "#fff", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div>
-                      <span style={{ background: "#eff6ff", color: "#1d4ed8", borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{doc.type}</span>
-                      <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 8 }}>{doc.title}</h2>
-                      <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>{doc.authorName} · {doc.createdAt}</div>
-                    </div>
-                    <StatusBadge status={status} />
-                  </div>
-                  <div style={{ background: "#f8fafc", borderRadius: 10, padding: 16, fontSize: 14, color: "#334155", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{doc.content}</div>
-                  {doc.attachments.length > 0 && <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 6 }}>{doc.attachments.map((f, i) => <span key={i} style={{ background: "#eff6ff", color: "#1d4ed8", borderRadius: 6, padding: "3px 10px", fontSize: 12 }}>📄 {f}</span>)}</div>}
-                </div>
-                <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>결재 현황</h3>
-                  {doc.steps.map((step, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, background: step.status === "approved" ? "#d1fae5" : step.status === "rejected" ? "#fee2e2" : i === curStep ? "#dbeafe" : "#f1f5f9", color: step.status === "approved" ? "#065f46" : step.status === "rejected" ? "#991b1b" : i === curStep ? "#1d4ed8" : "#94a3b8" }}>
-                          {step.status === "approved" ? "✓" : step.status === "rejected" ? "✗" : i + 1}
-                        </div>
-                        {i < doc.steps.length - 1 && <div style={{ width: 2, height: 28, background: "#e2e8f0", margin: "2px 0" }} />}
-                      </div>
-                      <div style={{ paddingBottom: 20 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{step.role}</div>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>{step.status === "approved" ? `✅ 승인 · ${step.date}` : step.status === "rejected" ? `❌ 반려 · ${step.date}` : i === curStep ? "⏳ 결재 대기" : "대기"}</div>
-                        {step.comment && <div style={{ fontSize: 13, color: "#475569", marginTop: 4, background: "#f8fafc", borderRadius: 6, padding: "6px 10px" }}>💬 {step.comment}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-{canApprove(doc) && (
-                  <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>결재 처리</h3>
-                    <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="의견을 입력하세요 (선택)" rows={3} style={{ ...iStyle, resize: "vertical", marginBottom: 12 }} />
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={() => handleApprove(doc.id, true)} style={{ ...bStyle, background: "#10b981", color: "#fff", flex: 1 }}>✅ 승인</button>
-                      <button onClick={() => handleApprove(doc.id, false)} style={{ ...bStyle, background: "#ef4444", color: "#fff", flex: 1 }}>❌ 반려</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
+// ── NOTIF ──
+function renderNotif() {
+  const notifs = getNotifs();
+  const myNotifs = notifs[currentUser.id]||[];
+  if (myNotifs.length===0) {
+    document.getElementById('notifList').innerHTML = '<div class="empty-state"><div class="icon">🔔</div>알림이 없습니다.</div>';
+    return;
+  }
+  document.getElementById('notifList').innerHTML = myNotifs.map(n=>`
+    <div class="notif-item ${n.read?'':'unread'}" onclick="openDoc(${n.docId})">
+      ${!n.read?'<div class="notif-dot"></div>':'<div style="width:8px;flex-shrink:0;"></div>'}
+      <div>
+        <div class="notif-text">${n.msg}</div>
+        <div class="notif-date">${n.date||''}</div>
       </div>
     </div>
-  );
+  `).join('');
 }
+
+function updateNotifBadge() {
+  if (!currentUser) return;
+  const notifs = getNotifs();
+  const myNotifs = (notifs[currentUser.id]||[]).filter(n=>!n.read);
+  const badge = document.getElementById('notifBadge');
+  if (myNotifs.length>0) {
+    badge.style.display='inline';
+    badge.textContent=myNotifs.length;
+  } else {
+    badge.style.display='none';
+  }
+}
+
+// ── ADMIN ──
+function renderAdmin() {
+  document.getElementById('userList').innerHTML = USERS.map(u=>`
+    <div class="user-row">
+      <div class="user-avatar">${u.name[0]}</div>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:14px;">${u.name}</div>
+        <div style="font-size:12px;color:var(--text2);">${u.role}</div>
+      </div>
+      ${u.isAdmin?'<span class="badge-admin">총무</span>':''}
+    </div>
+  `).join('');
+
+  document.getElementById('adminDocList').innerHTML = docs.length===0
+    ? '<div class="empty-state">문서가 없습니다.</div>'
+    : docs.map(d=>`
+      <div class="doc-row" onclick="openDoc(${d.id})">
+        <div class="doc-icon">${DOC_ICON[d.type]||'📄'}</div>
+        <div class="doc-info">
+          <div class="doc-title">${d.title}</div>
+          <div class="doc-meta">${d.authorName} · ${d.createdAt}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteDoc(${d.id})">삭제</button>
+      </div>
+    `).join('');
+}
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
